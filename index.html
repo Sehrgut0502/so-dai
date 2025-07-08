@@ -114,11 +114,30 @@
 
         <div class="data-section">
             <h3>レポート記述欄 / Report</h3>
-            <p>- Name / 氏名: 関根蒼大</p>
-            <p>- Department / 学部: 環境情報学部</p>
-            <p>- Year / 学年: B2</p>
-            <p>- Student ID / 学籍番号: 72444562</p>
-            <p>- CNS Email / CNSメールアドレス: t24456ss@sfc.keio.ac.jp</p>
+            <p><strong>- Name / 氏名:</strong> 関根蒼大</p>
+            <p><strong>- Department / 学部:</strong> 環境情報学部</p>
+            <p><strong>- Year / 学年:</strong> B2</p>
+            <p><strong>- Student ID / 学籍番号:</strong> 72444562</p>
+            <p><strong>- CNS Email / CNSメールアドレス:</strong> t24456ss@sfc.keio.ac.jp</p>
+
+            <h4>Collected Data / 収集した行動データ</h4>
+            <p><strong>- Reason behind data selection / 選定した理由:</strong> 決められていたため</p>
+            <p><strong>- Details about collection / 収集についての詳細:</strong> 各状態について30秒間スマホのセンサーを用いて計測した</p>
+            <p><strong>- Any challenges and tweaks / 工夫した点・困難だった点:</strong> 湘南台駅の相鉄線の階段を登るのが辛かった</p>
+
+            <h4>Features / 特徴量</h4>
+            <p><strong>- Reason behind data selection / 選定した理由:</strong> 例として挙げられていた4つの特徴量を使用したため</p>
+            <p><strong>- Details about additional feature types / 追加した特徴量について:</strong> 特に追加した特徴量は無し</p>
+            <p><strong>- Any challenges and tweaks / 工夫した点・困難だった点:</strong> 特になし</p>
+
+            <h4>ML Model / 機械学習モデル</h4>
+            <p><strong>- Algorithm you used and the training result / 採用したアルゴリズムや学習結果の詳細:</strong> Decision Treeを使用、精度は75%と出ていた。</p>
+            <p><strong>- Any challenges and tweaks / 工夫した点・困難だった点:</strong> もっと効果的な特徴量を追加して、データを増やせばより精度を上げられるかもしれない。</p>
+
+            <h4>Real-time execution result / 実機に移植しての性能評価</h4>
+            <p><strong>- Evaluation metric you used / 評価尺度について:</strong> それぞれの状態について今度は15秒くらい同じ動作をしてみた</p>
+            <p><strong>- Evaluation results / 評価結果:</strong> WalkとUpの区別に特に苦労しているようだった。Stillとrunは精度高め。</p>
+            <p><strong>- Any challenges and tweaks / 工夫した点・困難だった点:</strong> 決定木の部分をwekaで作成し、その後は1度例のhtmlに張り付けていい感じにAIにデザインを変えてもらいました。</p>
         </div>
     </div>
 
@@ -264,26 +283,44 @@
             `;
         }
 
-        // 簡単な活動分類
-        function classifyActivity() {
-            const totalAccel = Math.sqrt(
-                Math.pow(parseFloat(features.aveX), 2) + 
-                Math.pow(parseFloat(features.aveY), 2) + 
-                Math.pow(parseFloat(features.aveZ), 2)
-            );
-
-            let activity = 'Unknown';
-            if (totalAccel < 2) {
-                activity = 'Still (静止)';
-            } else if (totalAccel < 5) {
-                activity = 'Walk (歩行)';
-            } else if (totalAccel < 8) {
-                activity = 'Up (階段上り)';
+        function classify(yvar, xmax, zmin) {
+            if (yvar <= 0.115316) {
+                return "still";
             } else {
-                activity = 'Run (走行)';
+                if (xmax <= 3.686207) {
+                    if (zmin <= -7.127506) {
+                        if (xmax <= 2.017366) {
+                            if (xmax <= 1.850156) {
+                                return "up";
+                            } else {
+                                return "walk";
+                            }
+                        } else {
+                            return "up";
+                        }
+                    } else {
+                        return "walk";
+                    }
+                } else {
+                    return "run";
+                }
+            }
+        }
+
+        function classifyActivity() {
+            if (sensorData.length === 0) {
+                classificationDiv.textContent = '待機中...';
+                return;
             }
 
-            classificationDiv.textContent = `${activity} (総加速度: ${totalAccel.toFixed(2)})`;
+            // 特徴量を取得
+            const yvar = Math.abs(parseFloat(features.maxY) - parseFloat(features.minY));
+            const xmax = parseFloat(features.maxX);
+            const zmin = parseFloat(features.minZ);
+
+            const result = classify(yvar, xmax, zmin);
+            
+            classificationDiv.textContent = `${result} (yvar: ${yvar.toFixed(3)}, xmax: ${xmax.toFixed(3)}, zmin: ${zmin.toFixed(3)})`;
         }
 
         // 初期化時のチェック
