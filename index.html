@@ -1,244 +1,300 @@
-<meta charset="UTF-8">
-<html>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity Recognition</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 5px;
+            width: 100%;
+        }
+        .button:hover {
+            background-color: #45a049;
+        }
+        .button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .data-section {
+            background-color: #f9f9f9;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #4CAF50;
+        }
+        .error {
+            color: red;
+            background-color: #ffe6e6;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .success {
+            color: green;
+            background-color: #e6ffe6;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        #rawData {
+            font-family: monospace;
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Activity Recognition</h1>
+        
+        <div id="status"></div>
+        
+        <button id="requestPermission" class="button">
+            センサー許可を要求
+        </button>
+        
+        <button id="startButton" class="button" disabled>
+            加速度センサー開始
+        </button>
+        
+        <button id="stopButton" class="button" disabled>
+            停止
+        </button>
 
-  <head>
-    <title>jQuery Mobile page</title>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width,user-scalable=no,initial-scale=1,maximum-scale=1">
-    <meta name="mobile-web-app-capable" content="yes">
-    
-    <link rel="stylesheet" href="https://web.sfc.keio.ac.jp/~slash/ABC/ac/themes/TOBASIC.css" />
-    <link rel="stylesheet" href="https://web.sfc.keio.ac.jp/~slash/ABC/ac/themes/jquery.mobile.icons.min.css" />
+        <div class="data-section">
+            <h3>(3) Classification result</h3>
+            <div id="classification">待機中...</div>
+        </div>
 
-    <script src="https://code.jquery.com/jquery-1.11.1.min.js"></script> 
-    <script src="https://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.js"></script>
+        <div class="data-section">
+            <h3>(2) Features for this time window</h3>
+            <div id="features">
+                - min x: 0<br>
+                - max x: 0<br>
+                - ave x: 0<br>
+                - min y: 0<br>
+                - max y: 0<br>
+                - ave y: 0<br>
+                - min z: 0<br>
+                - max z: 0<br>
+                - ave z: 0
+            </div>
+        </div>
 
-    <link rel="stylesheet" href="https://code.jquery.com/mobile/1.4.5/jquery.mobile.structure-1.4.5.min.css" /> 
-  </head>
-  
-  <body>
-    <div style="align: center;">
-      <button onclick="requestMotionPermission();">Get permission and start sensing</button>
-      <button onclick="stopDeviceMotion();">Stop</button>
+        <div class="data-section">
+            <h3>(1) Raw sensor values for this time window</h3>
+            <div id="rawData">センサーデータがここに表示されます...</div>
+        </div>
+
+        <div class="data-section">
+            <h3>レポート記述欄 / Report</h3>
+            <p>- Name / 氏名: 関根蒼大</p>
+            <p>- Department / 学部: 環境情報学部</p>
+            <p>- Year / 学年: B2</p>
+            <p>- Student ID / 学籍番号: 72444562</p>
+            <p>- CNS Email / CNSメールアドレス: t24456ss@sfc.keio.ac.jp</p>
+        </div>
     </div>
-    <h2>Activity Recognition</h2>
-    <h3>(3) Classification result</h3>
-    <ul>
-    <li> Result: <span id="current_result" style="color:red;font-size:2.0em; font-weight: bold; border-top: 1px solid black; border-bottom: 1px solid black;">null</span> </li> 
-    </ul>
-    
-    <h3>(2) Features for this time window</h3>
-    <ul>
-    <li> min x: <span id="xmin">0</span> </li>
-    <li> max x: <span id="xmax">0</span> </li>
-    <li> ave x: <span id="xave">0</span> </li>
 
-    <li> min y: <span id="ymin">0</span> </li>
-    <li> max y: <span id="ymax">0</span> </li>
-    <li> ave y: <span id="yave">0</span> </li>
+    <script>
+        let accelerometer = null;
+        let isCollecting = false;
+        let sensorData = [];
+        let features = {
+            minX: 0, maxX: 0, aveX: 0,
+            minY: 0, maxY: 0, aveY: 0,
+            minZ: 0, maxZ: 0, aveZ: 0
+        };
 
-    <li> min z: <span id="zmin">0</span> </li>
-    <li> max z: <span id="zmax">0</span> </li>
-    <li> ave z: <span id="zave">0</span> </li>
-    </ul>
+        const statusDiv = document.getElementById('status');
+        const requestBtn = document.getElementById('requestPermission');
+        const startBtn = document.getElementById('startButton');
+        const stopBtn = document.getElementById('stopButton');
+        const rawDataDiv = document.getElementById('rawData');
+        const featuresDiv = document.getElementById('features');
+        const classificationDiv = document.getElementById('classification');
 
-    <h3>(1) Raw sensor values for this time window</h3>
-    <ul>
-    <li> X: <span id="accel-x">0</span> </li> 
-    <li> Y: <span id="accel-y">0</span> </li> 
-    <li> Z: <span id="accel-z">0</span> </li>
-    </ul>
-    
-    <textarea id="raw-data" style="width:90%;height:50vh;"></textarea>
+        // デバイス判定
+        function isMobileDevice() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
 
-    <hr/>
+        // ステータス表示
+        function showStatus(message, type = 'info') {
+            statusDiv.innerHTML = `<div class="${type}">${message}</div>`;
+        }
 
-    <h2>レポート記述欄 / Report</h2>
-    <ul>
-      <li>Name / 氏名: 関根蒼大</li>
-      <li>Department / 学部: 環境情報学部</li>
-      <li>Year / 学年: B2</li>
-      <li>Student ID / 学籍番号: 72444562</li>
-      <li>CNS Email / CNSメールアドレス: t24456ss@sfc.keio.ac.jp</li>
-    </ul>
+        // 許可要求ボタン
+        requestBtn.addEventListener('click', async () => {
+            try {
+                if (!isMobileDevice()) {
+                    showStatus('このアプリはモバイルデバイスで使用してください。', 'error');
+                    return;
+                }
 
-    <h3>Collected Data / 収集した行動データ</h3>
-    <ul>
-      <li>Reason behind data selection / 選定した理由: 決められていたため</li>
-      <li>Details about collection / 収集についての詳細: 各状態について30秒間スマホのセンサーを用いて計測した</li>
-      <li>Any challenges and tweaks / 工夫した点・困難だった点: 湘南台駅の相鉄線の階段を登るのが辛かった</li>
-    </ul>
-
-    <h3>Features / 特徴量</h3>
-    <ul>
-      <li>Reason behind data selection / 選定した理由: 例として挙げられていた4つの特徴量を使用したため</li>
-      <li>Details about additional feature types / 追加した特徴量について: 特に追加した特徴量は無し</li>
-      <li>Any challenges and tweaks / 工夫した点・困難だった点: 特になし</li>
-    </ul>    
-
-    <h3>ML Model / 機械学習モデル</h3>
-    <ul>
-      <li>Algorithm you used and the training result / 採用したアルゴリズムや学習結果の詳細: Decision Treeを使用、精度は75%と出ていた。</li>
-      <li>Any challenges and tweaks / 工夫した点・困難だった点: もっと効果的な特徴量を追加して、データを増やせばより精度を上げられるかもしれない。</li>
-    </ul>
-
-    <h3>Real-time execution result / 実機に移植しての性能評価</h3>
-    <ul>
-      <li>Evaluation metric you used / 評価尺度について: それぞれの状態について今度は15秒くらい同じ動作をしてみた</li>
-      <li>Evaluation results / 評価結果: WalkとUpの区別に特に苦労しているようだった。Stillとrunは精度高め。</li>
-      <li>Any challenges and tweaks / 工夫した点・困難だった点: 特になし</li>
-    </ul>
-
-  </body>
-
-
-<!--  ===========================================  -->
-<script type="text/javascript">
-
-alert("Welcome to example Activity Recognition (11).");
-
-//CONFIG: Length of each time window
-const NUM_DATA_PER_FRAME = 200;
-
-//Arrays for saving the raw sensor data
-var xdata = [];
-var ydata = [];
-var zdata = [];
-var num_data = 0;
-
-//Features
-var xmin = 0.0;
-var xmax = 0.0;
-var xave = 0.0;
-var ymin = 0.0;
-var ymax = 0.0;
-var yave = 0.0;
-var zmin = 0.0;
-var zmax = 0.0;
-var zave = 0.0;
-
-//////////////////////////////////////////////////////
-//Function to get sensor access permission from the browser
-//////////////////////////////////////////////////////
-function requestMotionPermission(){
-  if ( DeviceMotionEvent &&
-       typeof DeviceMotionEvent.requestPermission === 'function' ){
-      // iOS 13+ の Safari
-      // 許可を取得
-      DeviceMotionEvent.requestPermission().then(permissionState => {
-	  if (permissionState === 'granted') {
-              // 許可を得られた場合、devicemotionをイベントリスナーに追加
-	      window.addEventListener("devicemotion", handleAcceleration, false);
-	  } else {
-              // 許可を得られなかった場合の処理
-	      console.log("Perrmission not granted!");
-	      alert("Perrmission not granted!");
-	  }
-      }).catch(console.error) // https通信でない場合などで許可を取得できなかった場合
-
-  } else {
-      //For other devices
-      console.log("detected other device. so adding listener...");
-      window.addEventListener("devicemotion", handleAcceleration, false);
-  }
-
-}
-
-function stopDeviceMotion(){ 
-    window.removeEventListener("devicemotion", handleAcceleration, false);
-}
-
-
-////////////////////////////////////////////////////////////////////
-//Function(1): 読み込まれてきた最新の加速度データ(X,Y,Z)を処理する関数
-//  - この関数は(機種によりますが) 秒速10〜100回というような高頻度で呼ばれます
-////////////////////////////////////////////////////////////////////
-function handleAcceleration(ev){
-
-    //alert("" + event.acceleration.x + " " + event.acceleration.y + " " + event.acceleration.z);
-    $('#accel-x').text( ev.acceleration.x );
-    xdata.push(ev.acceleration.x);
-    $('#accel-y').text( ev.acceleration.y );
-    ydata.push(ev.acceleration.y);
-    $('#accel-z').text( ev.acceleration.z );
-    zdata.push(ev.acceleration.z);
-    $('#raw-data').append(ev.acceleration.x + ", " + ev.acceleration.y + ", " + ev.acceleration.z + "\n");
-
-    num_data++;
-    //If we have enough raw sensor data...
-    if( num_data == NUM_DATA_PER_FRAME ){
-
-	//execute feature calculations.
-	featureExtraction();
-
-	//Let's classify the activity!
-	var current_activity = classify();
-	$('#current_result').text( current_activity );
-	
-	//clear the raw sensor data
-	xdata=[];
-	ydata=[];
-	zdata=[];
-	//Clear the textarea 
-	$('#raw-data').empty();
-	//Counter back to 0
-	num_data=0;
-    }
-    
-}
-
-////////////////////////////////////////////////////////////////////
-//Function(2):センサデータから "feature"(特徴量)を計算する関数
-//  - この関数は NUM_DATA_PER_FRAME 変数で設定された数だけセンサデータが
-//    「設定されたタイムフレーム」にたまる度に呼ばれます。
-//  - 例: センサデータが 50Hz (=50 data / seconds)
-//        NUM_DATA_PER_FRAME が 200 の場合
-//        → 約4秒に1度の頻度で呼ばれます
-////////////////////////////////////////////////////////////////////
-//helper func. to calculate average
-const arrAvg = arr => arr.reduce((a,b) => a + b, 0) / arr.length
-
-function featureExtraction(){
-    xmin = Math.min.apply(Math, xdata); $('#xmin').text(xmin);
-    xmax = Math.max.apply(Math, xdata); $('#xmax').text(xmax);
-    xave = arrAvg(xdata); $('#xave').text(xave);
-    
-    ymin = Math.min.apply(Math, ydata); $('#ymin').text(ymin);
-    ymax = Math.max.apply(Math, ydata); $('#ymax').text(ymax);
-    yave = arrAvg(ydata); $('#yave').text(yave);
-
-    zmax = Math.max.apply(Math, zdata); $('#zmax').text(zmax);
-    zmin = Math.min.apply(Math, zdata); $('#zmin').text(zmin);
-    zave = arrAvg(zdata); $('#zave').text(zave);
-}
-
-////////////////////////////////////////////////////////////////////
-//Function(3): 最新フレームにおける特徴量(feature)から、現在のユーザの
-//行動を分類 (classify) する関数          
-//  - ここに書いてあるのは、手打ちで書いたサンプルのif文ロジックです
-//  - 実際には機械学習エンジンが出力したif文の固まり (決定木アルゴリズムの場合)
-//  - がここに入ります
-////////////////////////////////////////////////////////////////////
-function classify() {
-    if (yvar <= 0.115316) {
-        return "still";
-    } else {
-        if (xmax <= 3.686207) {
-            if (zmin <= -7.127506) {
-                if (xmax <= 2.017366) {
-                    if (xmax <= 1.850156) {
-                        return "up";
+                // iOS 13+ の許可要求
+                if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                    const permission = await DeviceMotionEvent.requestPermission();
+                    if (permission === 'granted') {
+                        showStatus('センサーアクセスが許可されました！', 'success');
+                        startBtn.disabled = false;
+                        requestBtn.disabled = true;
                     } else {
-                        return "walk";
+                        showStatus('センサーアクセスが拒否されました。', 'error');
                     }
                 } else {
-                    return "up";
+                    // Android または古いバージョン
+                    showStatus('センサーアクセスが利用可能です！', 'success');
+                    startBtn.disabled = false;
+                    requestBtn.disabled = true;
                 }
-            } else {
-                return "walk";
+            } catch (error) {
+                showStatus(`エラー: ${error.message}`, 'error');
             }
-        } else {
-            return "run";
+        });
+
+        // センサー開始
+        startBtn.addEventListener('click', () => {
+            if (isCollecting) return;
+            
+            isCollecting = true;
+            sensorData = [];
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            
+            showStatus('センサーデータを収集中...', 'success');
+
+            window.addEventListener('devicemotion', handleMotion);
+        });
+
+        // センサー停止
+        stopBtn.addEventListener('click', () => {
+            if (!isCollecting) return;
+            
+            isCollecting = false;
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            
+            window.removeEventListener('devicemotion', handleMotion);
+            calculateFeatures();
+            classifyActivity();
+            
+            showStatus('センサーデータ収集を停止しました。', 'info');
+        });
+
+        // モーションデータ処理
+        function handleMotion(event) {
+            if (!isCollecting) return;
+
+            const acceleration = event.accelerationIncludingGravity;
+            if (acceleration && acceleration.x !== null && acceleration.y !== null && acceleration.z !== null) {
+                const data = {
+                    x: acceleration.x.toFixed(2),
+                    y: acceleration.y.toFixed(2),
+                    z: acceleration.z.toFixed(2),
+                    timestamp: Date.now()
+                };
+                
+                sensorData.push(data);
+                
+                // 最新の10個のデータを表示
+                const recentData = sensorData.slice(-10);
+                rawDataDiv.textContent = recentData.map(d => 
+                    `x: ${d.x}, y: ${d.y}, z: ${d.z}`
+                ).join('\n');
+            }
         }
-    }
-}
+
+        // 特徴量計算
+        function calculateFeatures() {
+            if (sensorData.length === 0) return;
+
+            const xValues = sensorData.map(d => parseFloat(d.x));
+            const yValues = sensorData.map(d => parseFloat(d.y));
+            const zValues = sensorData.map(d => parseFloat(d.z));
+
+            features = {
+                minX: Math.min(...xValues).toFixed(2),
+                maxX: Math.max(...xValues).toFixed(2),
+                aveX: (xValues.reduce((a, b) => a + b, 0) / xValues.length).toFixed(2),
+                minY: Math.min(...yValues).toFixed(2),
+                maxY: Math.max(...yValues).toFixed(2),
+                aveY: (yValues.reduce((a, b) => a + b, 0) / yValues.length).toFixed(2),
+                minZ: Math.min(...zValues).toFixed(2),
+                maxZ: Math.max(...zValues).toFixed(2),
+                aveZ: (zValues.reduce((a, b) => a + b, 0) / zValues.length).toFixed(2)
+            };
+
+            featuresDiv.innerHTML = `
+                - min x: ${features.minX}<br>
+                - max x: ${features.maxX}<br>
+                - ave x: ${features.aveX}<br>
+                - min y: ${features.minY}<br>
+                - max y: ${features.maxY}<br>
+                - ave y: ${features.aveY}<br>
+                - min z: ${features.minZ}<br>
+                - max z: ${features.maxZ}<br>
+                - ave z: ${features.aveZ}
+            `;
+        }
+
+        // 簡単な活動分類
+        function classifyActivity() {
+            const totalAccel = Math.sqrt(
+                Math.pow(parseFloat(features.aveX), 2) + 
+                Math.pow(parseFloat(features.aveY), 2) + 
+                Math.pow(parseFloat(features.aveZ), 2)
+            );
+
+            let activity = 'Unknown';
+            if (totalAccel < 2) {
+                activity = 'Still (静止)';
+            } else if (totalAccel < 5) {
+                activity = 'Walk (歩行)';
+            } else if (totalAccel < 8) {
+                activity = 'Up (階段上り)';
+            } else {
+                activity = 'Run (走行)';
+            }
+
+            classificationDiv.textContent = `${activity} (総加速度: ${totalAccel.toFixed(2)})`;
+        }
+
+        // 初期化時のチェック
+        window.addEventListener('load', () => {
+            if (!isMobileDevice()) {
+                showStatus('このアプリはモバイルデバイス（スマートフォン）で使用してください。', 'error');
+                requestBtn.disabled = true;
+            } else {
+                showStatus('モバイルデバイスが検出されました。「センサー許可を要求」ボタンを押してください。', 'info');
+            }
+        });
+    </script>
+</body>
+</html>
